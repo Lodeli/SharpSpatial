@@ -45,7 +45,31 @@ dotnet add package SharpSpatial
 ## 🚀 Quick Start
 
 ```csharp
-// TODO
+using SharpSpatial;
+
+
+// Prepare some WKT to parse
+string squareWKT = "POLYGON((5 65, 25 65, 25 85, 5 85, 5 65))";
+string pointH_WKT = "POINT(0 75)";
+string pointV_WKT = "POINT(15 88)";
+
+// Create a square and two points
+SharpGeography square = new(squareWKT, 4326, false);
+SharpGeography pointH = new(pointH_WKT, 4326, false);
+SharpGeography pointV = new(pointV_WKT, 4326, false);
+
+// Get the shortest line from the left point to the square (the point will fall in the middle of the vertical side of the square)
+SharpGeography? shortestLineH = pointH.GetShortestLineTo(square);
+string? shortestLineH_WKT = shortestLineH?.ToWKT();
+
+/// Get the shortest line from the top point to the square (this time, the horizontal side of the square is not a straight line)
+SharpGeography? shortestLineV = pointV.GetShortestLineTo(square);
+string? shortestLineV_WKT = shortestLineV?.ToWKT();
+
+// Create a geodesic buffer
+string testWKT = "POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))";
+SharpGeography test = new(testWKT, 4326, false);
+var buffer = test.Buffer(500000).ToWKT(8);
 ```
 
 ---
