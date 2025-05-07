@@ -1,5 +1,8 @@
 # SharpSpatial
 
+[![Sponsor](https://img.shields.io/badge/Sponsor-❤-ff69b4)](https://github.com/sponsors/Lodeli)
+[![NuGet](https://img.shields.io/nuget/v/SharpSpatial.svg)](https://www.nuget.org/packages/SharpSpatial/)
+
 **SharpSpatial** is a lightweight geospatial library for .NET, built as a modern alternative to `SqlGeography` and `SqlGeometry`, with full support for .NET Core and custom geodesic calculations written entirely in C#.
 
 It combines the power of **NetTopologySuite**, **GeoAPI**, and **ProjNET4GeoAPI** for planar operations, while offering accurate geodesic calculations (Haversine and Vincenty) and basic projection capabilities (Spherical Mercator).
@@ -77,6 +80,15 @@ Have an idea or feedback? [Open an issue](https://github.com/Lodeli/SharpSpatial
 ## 📄 License
 
 Licensed under the MIT License – free to use, modify, and distribute.
+
+### Third-party licenses
+
+SharpSpatial uses the following third-party libraries:
+
+- [NetTopologySuite](https://github.com/NetTopologySuite/NetTopologySuite), licensed under the BSD-2-Clause license.
+- [ProjNET4GeoAPI](https://github.com/NetTopologySuite/ProjNet4GeoAPI), licensed under the BSD-2-Clause license.
+
+These libraries retain their respective licenses.
 
 ---
 
