@@ -9,8 +9,21 @@ using SharpSpatial.Model;
 
 namespace SharpSpatial
 {
+    /// <summary>
+    /// Represents a geometry, tipically in the Mercator projection
+    /// </summary>
     public class SharpGeometry : BaseGeometry
     {
+        /// <summary>
+        /// Returns the X coordinate of a vertex of the geometry (usually the first one)
+        /// </summary>
+        public double X => _geometry.Coordinate.X;
+
+        /// <summary>
+        /// Returns the Y coordinate of a vertex of the geometry (usually the first one)
+        /// </summary>
+        public double Y => _geometry.Coordinate.Y;
+
         #region C'tors
         /// <summary>
         /// Creates an empty <see cref="SharpGeometry"/>
@@ -24,10 +37,19 @@ namespace SharpSpatial
         /// <param name="geometry">The <see cref="Geometry"/> shape for this <see cref="SharpGeometry"/></param>
         public SharpGeometry(Geometry geometry) : base(geometry, 0, 0)
         { }
-        #endregion
 
         /// <summary>
-        /// Returns the point at the given index if it exists, otherwise null
+        /// Creates a new <see cref="SharpGeometry"/> from the given Well-Known Text (WKT) string
+        /// </summary>
+        /// <param name="wkt">WKT to parse</param>
+        /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
+        public SharpGeometry(string wkt, bool? makeValid) : this(GeoHelper.CreateGeom(wkt, makeValid, 0))
+        { }
+        #endregion
+
+        #region Public methods
+        /// <summary>
+        /// Returns the <see cref="SharpGeometry"/> point at the given index if it exists, otherwise null
         /// </summary>
         /// <param name="index"></param>
         /// <returns></returns>
@@ -41,17 +63,14 @@ namespace SharpSpatial
         }
 
         /// <summary>
-        /// Returns the X coordinate of a vertex of the geometry (usually the first one)
+        /// Returns the <see cref="SharpGeometry"/> at the given index if this is a collection of geometries
         /// </summary>
-        public double X => _geometry.Coordinate.X;
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public SharpGeometry GetGeometryN(int index) => GeoHelper.CreateGeometry(_geometry.GetGeometryN(index));
 
         /// <summary>
-        /// Returns the Y coordinate of a vertex of the geometry (usually the first one)
-        /// </summary>
-        public double Y => _geometry.Coordinate.Y;
-
-        /// <summary>
-        /// Returns the envelope of this geometry
+        /// Returns the envelope (bounding box) of this geometry
         /// </summary>
         /// <returns></returns>
         public SharpGeometry GetEnvelope()
@@ -61,28 +80,7 @@ namespace SharpSpatial
         }
 
         /// <summary>
-        /// Returns the geometry at the given index
-        /// </summary>
-        /// <param name="index"></param>
-        /// <returns></returns>
-        public SharpGeometry GetGeometryN(int index) => GeoHelper.CreateGeometry(_geometry.GetGeometryN(index));
-
-        /// <summary>
-        /// Returns the planar buffer of this geometry
-        /// </summary>
-        /// <param name="distance">The width of the buffer</param>
-        /// <returns></returns>
-        public SharpGeometry Buffer(double distance) => GeoHelper.GetBuffer(this, distance);
-
-        /// <summary>
-        /// Returns the planar distance between this geometry and another one
-        /// </summary>
-        /// <param name="other"></param>
-        /// <returns></returns>
-        public DistanceSolution? Distance(SharpGeometry other) => GeoHelper.GetDistance(this, other);
-
-        /// <summary>
-        /// Returns the nearest points, between this geometry and another one, and their distance
+        /// Returns the nearest points, and their distance, between this geometry and another one
         /// </summary>
         /// <param name="other"></param>
         /// <returns></returns>
@@ -96,56 +94,63 @@ namespace SharpSpatial
         public SharpGeometry? GetShortestLineTo(SharpGeometry other) => GeoHelper.GetShortestLine(this, other);
 
         /// <summary>
-        /// Returns the intersection of this geometry and another one
+        /// Returns distance, initial and final bearing between this geometry and another one
         /// </summary>
         /// <param name="other"></param>
         /// <returns></returns>
-        public SharpGeometry Intersection(SharpGeometry other) => GeoHelper.GetIntersection(this, other);
+        public DistanceSolution? Distance(SharpGeometry other) => GeoHelper.GetDistance(this, other);
 
         /// <summary>
-        /// Returns true if this geometry intersects another one
+        /// Returns the planar buffer of this geometry
+        /// </summary>
+        /// <param name="distance">The width of the buffer</param>
+        /// <returns></returns>
+        public SharpGeometry Buffer(double distance) => GeoHelper.GetBuffer(this, distance);
+
+        /// <summary>
+        /// Returns true if this geometry intersects the given one
         /// </summary>
         /// <param name="other"></param>
         /// <returns></returns>
         public bool Intersects(SharpGeometry other) => GeoHelper.Intersect(this, other);
 
         /// <summary>
-        /// Returns the unprojected geography of this Mercator geometry
+        /// Returns the intersection between this geometry and the given one
         /// </summary>
-        /// <param name="srid"></param>
+        /// <param name="other"></param>
         /// <returns></returns>
-        public SharpGeography? Unproject(int srid) => GeoHelper.Unproject(this, srid);
+        public SharpGeometry Intersection(SharpGeometry other) => GeoHelper.GetIntersection(this, other);
 
         /// <summary>
-        /// Returns the reduced geometry of this geometry using the given tolerance
-        /// </summary>
-        /// <param name="tolerance"></param>
-        /// <returns></returns>
-        public SharpGeometry Reduce(double tolerance) => GeoHelper.GetReduced(this, tolerance);
-
-        /// <summary>
-        /// Returns the densified geometry of this geometry using the given distance tolerance
-        /// </summary>
-        /// <param name="distanceTolerance"></param>
-        /// <returns></returns>
-        public SharpGeometry Densify(double distanceTolerance) => GeoHelper.GetDensified(this, distanceTolerance);
-
-        /// <summary>
-        /// Returns the union between this geometry and another one
+        /// Returns the union between this geometry and the given one
         /// </summary>
         /// <param name="other"></param>
         /// <returns></returns>
         public SharpGeometry? Union(SharpGeometry other) => GeoHelper.GetUnion(this, other);
 
         /// <summary>
-        /// Returns the difference between this geometry and another one
+        /// Returns the difference between this geometry and the given one
         /// </summary>
         /// <param name="other"></param>
         /// <returns></returns>
         public SharpGeometry Difference(SharpGeometry other) => GeoHelper.GetDifference(this, other);
 
         /// <summary>
-        /// Returns the length of this geometry
+        /// Returns the simplified geometry of this one, using the given tolerance
+        /// </summary>
+        /// <param name="tolerance">Tolerance to use</param>
+        /// <returns></returns>
+        public SharpGeometry Simplify(double tolerance) => GeoHelper.GetSimplified(this, tolerance);
+
+        /// <summary>
+        /// Returns the densified geometry of this one, using the given distance tolerance
+        /// </summary>
+        /// <param name="distanceTolerance"></param>
+        /// <returns></returns>
+        public SharpGeometry Densify(double distanceTolerance) => GeoHelper.GetDensified(this, distanceTolerance);
+
+        /// <summary>
+        /// Returns the length (perimeter for polygon, length for linear shapes) of this geometry.
         /// </summary>
         /// <returns></returns>
         public double GetLength() => GeoHelper.GetLength(this);
@@ -157,19 +162,35 @@ namespace SharpSpatial
         public double GetArea() => GeoHelper.GetArea(this);
 
         /// <summary>
-        /// Returns the fixed geometry: only if it crosses the International Date Line, it will be shifted to positive longitudes
+        /// Returns true if this geometry crosses the International Date Line (IDL or Antimeridian)
+        /// </summary>
+        /// <returns></returns>
+        public bool IsCrossingIDL() => GeoHelper.IsCrossingIDL(this);
+
+        /// <summary>
+        /// Returns a fixed geometry for the International Date Line (IDL or Antimeridian) by shifting longitudes &lt; 0 by +360
         /// </summary>
         /// <returns></returns>
         public SharpGeometry GetInternationalDateLineFix() => GeoHelper.GetInternationalDateLineFix(this);
 
         /// <summary>
-        /// Returns true if this geometry crosses the International Date Line
+        /// Computes a new geometry which has all component coordinate sequences in reverse order (opposite orientation) to this one
         /// </summary>
         /// <returns></returns>
-        public bool IsCrossingIDL() => GeoHelper.IsCrossingIDL(this);
+        public SharpGeometry Revert() => GeoHelper.Revert(this);
 
+        /// <summary>
+        /// Returns the fixed geometry from this one
+        /// </summary>
+        /// <returns></returns>
         public SharpGeometry? MakeValid() => GeoHelper.MakeValid(this);
 
-        public SharpGeometry Revert() => GeoHelper.Revert(this);
+        /// <summary>
+        /// Returns an unprojected <see cref="SharpGeography"/>, with the given SRID, from this (Mercator) geometry
+        /// </summary>
+        /// <param name="srid"></param>
+        /// <returns></returns>
+        public SharpGeography? Unproject(int srid) => GeoHelper.Unproject(this, srid);
+        #endregion
     }
 }

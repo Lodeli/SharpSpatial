@@ -20,17 +20,21 @@ using SharpSpatial.Model;
 
 namespace SharpSpatial.Helpers
 {
+    /// <summary>
+    /// Class with static methods to create geometries and perform spatial calculations
+    /// </summary>
     public static class GeoHelper
     {
         #region Consts
         /// <summary>
-        /// Default tolerance for the bearing variation in bearing when densifying, higher values reduce precision but improve speed.
+        /// Default tolerance for the bearing variation when densifying.
         /// </summary>
-        const double DEFAULT_BEARING_TOLERANCE = 0.05;
+        public const double DEFAULT_BEARING_TOLERANCE = 0.05;
+
         /// <summary>
         /// Radius of Earth in meters for Haversine formula
         /// </summary>
-        const double HAVERSINE_EARTH_R_M = 6371008.8; // Raggio medio terrestre in metri
+        const double HAVERSINE_EARTH_R_M = 6371008.8; // Mean radius of Earth in meters
         /// <summary>
         /// Major semi-axes of Earth WGS84 ellipsoid for Vincenty formula
         /// </summary>
@@ -48,17 +52,22 @@ namespace SharpSpatial.Helpers
         #region Fields
         private static readonly ICoordinateTransformationFactory s_ctFact;
         private static readonly WKTReader s_wktReader;
+        private static readonly WKBReader s_wkbReader;
         private static readonly GeometryFactory s_geometryFactory;
         private static readonly ICoordinateTransformation s_ctProj;
         private static readonly ICoordinateTransformation s_ctUnproj;
         #endregion
 
+        /// <summary>
+        /// Class with static methods to create geometries and perform spatial calculations
+        /// </summary>
         static GeoHelper()
         {
             s_ctFact = new CoordinateTransformationFactory();
             s_geometryFactory = new GeometryFactory(new PrecisionModel(PrecisionModels.Floating));
             NtsGeometryServices ntsGeometryServices = new(new PrecisionModel(PrecisionModels.Floating), 4326);
             s_wktReader = new(ntsGeometryServices);
+            s_wkbReader = new(ntsGeometryServices);
 
             IGeographicCoordinateSystem sourceCS = GeographicCoordinateSystem.WGS84;
             IProjectedCoordinateSystem targetCS = ProjectedCoordinateSystem.WebMercator;
@@ -68,88 +77,177 @@ namespace SharpSpatial.Helpers
 
         #region Public methods
         #region Creation methods
+        /// <summary>
+        /// Creates an empty <see cref="Geometry"/> object.
+        /// </summary>
+        /// <returns></returns>
         public static Geometry CreateEmptyGeo() => s_geometryFactory.CreateLineString();
 
+        /// <summary>
+        /// Creates an empty <see cref="SharpGeometry"/> object.
+        /// </summary>
+        /// <returns></returns>
         public static SharpGeometry CreateEmpty() => new();
 
+        /// <summary>
+        /// Creates an empty <see cref="SharpGeometry"/> object with the given SRID.
+        /// </summary>
+        /// <param name="srid"></param>
+        /// <returns></returns>
         public static SharpGeography CreateEmpty(int srid) => new(srid);
 
+        /// <summary>
+        /// Creates a <see cref="SharpGeometry"/> Point from a <see cref="Coordinate"/> object.
+        /// </summary>
+        /// <param name="coordinate"></param>
+        /// <returns></returns>
         public static SharpGeometry CreatePoint(Coordinate coordinate) => new(s_geometryFactory.CreatePoint(coordinate));
 
+        /// <summary>
+        /// Creates a <see cref="SharpGeography"/> Point from a <see cref="Coordinate"/> object with the given SRID.
+        /// </summary>
+        /// <param name="coordinate"></param>
+        /// <param name="srid"></param>
+        /// <returns></returns>
         public static SharpGeography CreatePoint(Coordinate coordinate, int srid) => new(s_geometryFactory.CreatePoint(coordinate), srid);
 
+        /// <summary>
+        /// Creates a <see cref="SharpGeometry"/> LineString from an array of <see cref="Coordinate"/> objects.
+        /// </summary>
+        /// <param name="points"></param>
+        /// <returns></returns>
         public static SharpGeometry CreateLineString(Coordinate[] points) => new(s_geometryFactory.CreateLineString(points));
 
+        /// <summary>
+        /// Creates a <see cref="SharpGeography"/> LineString from an array of <see cref="Coordinate"/> objects with the given SRID.
+        /// </summary>
+        /// <param name="srid"></param>
+        /// <param name="points"></param>
+        /// <returns></returns>
         public static SharpGeography CreateLineString(int srid, params Coordinate[] points) => new(s_geometryFactory.CreateLineString(points), srid);
 
+        /// <summary>
+        /// Creates a <see cref="SharpGeometry"/> Polygon from an array of <see cref="Coordinate"/> objects.
+        /// </summary>
+        /// <param name="points"></param>
+        /// <returns></returns>
         public static SharpGeometry CreatePolygon(Coordinate[] points) => new(s_geometryFactory.CreatePolygon(points));
 
+        /// <summary>
+        /// Creates a <see cref="SharpGeography"/> Polygon from an array of <see cref="Coordinate"/> objects with the given SRID.
+        /// </summary>
+        /// <param name="srid"></param>
+        /// <param name="points"></param>
+        /// <returns></returns>
         public static SharpGeography CreatePolygon(int srid, params Coordinate[] points) => new(s_geometryFactory.CreatePolygon(points), srid);
 
+        /// <summary>
+        /// Creates a <see cref="SharpGeometry"/> from a <see cref="Geometry"/> object.
+        /// </summary>
+        /// <param name="geometry"></param>
+        /// <returns></returns>
         public static SharpGeometry CreateGeometry(Geometry geometry) => new(geometry);
 
+        /// <summary>
+        /// Creates a <see cref="SharpGeography"/> from a <see cref="Geometry"/> object with the given SRID.
+        /// </summary>
+        /// <param name="geometry"></param>
+        /// <param name="srid"></param>
+        /// <returns></returns>
         public static SharpGeography CreateGeography(Geometry geometry, int srid) => new(geometry, srid);
 
-        public static SharpGeometry FromWKT(string wkt, bool? makeValid)
+        /// <summary>
+        /// Creates a <see cref="Geometry"/> from a Well-Known Text (WKT) string
+        /// </summary>
+        /// <param name="wkt">The WKT to parse</param>
+        /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
+        /// <param name="toleranceForDensify">Value of tolerance to be used for geodesic densify, 0 to not densify result</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="InvalidOperationException"></exception>
+        public static Geometry CreateGeom(string wkt, bool? makeValid, double toleranceForDensify = 0)
         {
-            Geometry geo = FromWKT(wkt, makeValid, 0);
+            Geometry result = s_wktReader.Read(wkt);
+            return FixParsedGeometry(result, makeValid, toleranceForDensify);
+        }
+
+        /// <summary>
+        /// Creates a <see cref="SharpGeometry"/> from a Well-Known Text (WKT) string
+        /// </summary>
+        /// <param name="wkt">The WKT to parse</param>
+        /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
+        /// <returns></returns>
+        public static SharpGeometry CreateGeometry(string wkt, bool? makeValid)
+        {
+            Geometry geo = CreateGeom(wkt, makeValid, 0);
             return new SharpGeometry(geo);
         }
 
         /// <summary>
-        /// Creates a <see cref="SharpGeography"/> from a WKT string.
+        /// Creates a new <see cref="SharpGeography"/> from the given Well-Known Text (WKT) string with the given SRID and eventually a tolerance already used for densification
         /// </summary>
-        /// <param name="wkt"></param>
-        /// <param name="srid"></param>
-        /// <param name="makeValid"></param>
-        /// <param name="toleranceForDensify">Value of tolerance to be used for densify, 0 to not densify result, default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <param name="wkt">The WKT to parse</param>
+        /// <param name="srid">The SRID to assign to the resulting geography</param>
+        /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
+        /// <param name="toleranceForDensify">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
-        public static SharpGeography FromWKT(string wkt, int srid, bool? makeValid, double toleranceForDensify)
+        public static SharpGeography CreateGeography(string wkt, int srid, bool? makeValid, double toleranceForDensify = DEFAULT_BEARING_TOLERANCE)
         {
-            Geometry result = FromWKT(wkt, makeValid, toleranceForDensify);
+            Geometry result = CreateGeom(wkt, makeValid, toleranceForDensify);
             return new SharpGeography(result, srid, toleranceForDensify);
         }
 
-        public static Geometry FromWKT(string wkt, bool? makeValid, double toleranceForDensify)
+        /// <summary>
+        /// Creates a <see cref="Geometry"/> from a Well-Known Binary (WKB) byte array
+        /// </summary>
+        /// <param name="wkb">The WKB to parse</param>
+        /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
+        /// <param name="toleranceForDensify">Value of tolerance to be used for geodesic densify, 0 to not densify result</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="InvalidOperationException"></exception>
+        /// <returns></returns>
+        public static Geometry CreateGeom(byte[] wkb, bool? makeValid, double toleranceForDensify = 0)
         {
-            Geometry result = s_wktReader.Read(wkt);
+            Geometry result = s_wkbReader.Read(wkb);
+            return FixParsedGeometry(result, makeValid, toleranceForDensify);
+        }
 
-            if (result is Polygon or MultiPolygon)
-            {
-                result = FixAntimeridianCrossing(result);
-            }
+        /// <summary>
+        /// Creates a <see cref="SharpGeometry"/> from a Well-Known Binary (WKB) byte array
+        /// </summary>
+        /// <param name="wkb">The WKB to parse</param>
+        /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
+        /// <returns></returns>
+        public static SharpGeometry CreateGeometry(byte[] wkb, bool? makeValid)
+        {
+            Geometry geo = CreateGeom(wkb, makeValid, 0);
+            return new SharpGeometry(geo);
+        }
 
-            if (makeValid != false)
-            {
-                if (!result.IsValid)
-                {
-                    if (makeValid == null)
-                        throw new ArgumentException("Geometry is invalid and 'makeValid' is not explicitly allowed.");
-
-                    result = MakeValid(result)
-                        ?? throw new InvalidOperationException("Geometry is invalid and cannot be repaired.");
-                }
-
-                if (!IsWellOriented(result))
-                {
-                    if (makeValid == null)
-                        throw new ArgumentException("Geometry orientation is incorrect and 'makeValid' is not explicitly allowed.");
-
-                    result = result.Reverse();
-                }
-            }
-
-            if (toleranceForDensify > 0)
-            {
-                result = Densify(result, toleranceForDensify);
-            }
-
-            return result;
+        /// <summary>
+        /// Creates a new <see cref="SharpGeography"/> from the given Well-Known Binary (WKB) byte array with the given SRID and eventually a tolerance already used for densification
+        /// </summary>
+        /// <param name="wkb">The WKB to parse</param>
+        /// <param name="srid">The SRID to assign to the resulting geography</param>
+        /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
+        /// <param name="toleranceForDensify">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
+        public static SharpGeography CreateGeography(byte[] wkb, int srid, bool? makeValid, double toleranceForDensify = DEFAULT_BEARING_TOLERANCE)
+        {
+            Geometry result = CreateGeom(wkb, makeValid, toleranceForDensify);
+            return new SharpGeography(result, srid, toleranceForDensify);
         }
         #endregion
 
+        /// <summary>
+        /// Returns the envelope (bounding box) of the given <see cref="Geometry"/>
+        /// </summary>
+        /// <param name="geometry"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
         public static Geometry GetEnvelope(Geometry geometry)
         {
             if (geometry == null || geometry.IsEmpty)
@@ -168,6 +266,13 @@ namespace SharpSpatial.Helpers
             return envelope;
         }
 
+        /// <summary>
+        /// Returns the nearest points between the given two <see cref="Geometry"/> and their distance
+        /// </summary>
+        /// <param name="geom1"></param>
+        /// <param name="geom2"></param>
+        /// <param name="geodesicPrecision">Eventual geodesic precision to apply</param>
+        /// <returns></returns>
         public static NearestSolution? GetNearestPoints(Geometry geom1, Geometry geom2, GeodesicPrecision? geodesicPrecision)
         {
             NearestSolution? result = null;
@@ -175,7 +280,7 @@ namespace SharpSpatial.Helpers
             Coordinate[] shell1 = GetExternalShell(geom1);
             Coordinate[] shell2 = GetExternalShell(geom2);
 
-            if (shell1.Length < 2 || shell2.Length < 2) return result;
+            if (shell1.Length < 1 || shell2.Length < 1) return result;
 
             double minDistance = double.MaxValue;
             Coordinate? nearestPoint1 = null;
@@ -232,6 +337,25 @@ namespace SharpSpatial.Helpers
                 : null;
         }
 
+        /// <summary>
+        /// Returns the nearest points, and their distance, between the given two <see cref="SharpGeometry"/>
+        /// </summary>
+        /// <param name="geom1"></param>
+        /// <param name="geom2"></param>
+        /// <returns></returns>
+        public static NearestSolution? GetNearestPoints(SharpGeometry geom1, SharpGeometry geom2)
+        {
+            return GetNearestPoints(geom1.Geo, geom1.Geo, null);
+        }
+
+        /// <summary>
+        /// Returns the nearest points, and their distance, between the given two <see cref="SharpGeography"/>
+        /// </summary>
+        /// <param name="geog1"></param>
+        /// <param name="geog2"></param>
+        /// <param name="geodesicPrecision">Geodesic precision to apply</param>
+        /// <param name="densifyWithBearingTolerance">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
         public static NearestSolution? GetNearestPoints(SharpGeography geog1, SharpGeography geog2,
             GeodesicPrecision geodesicPrecision, double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
         {
@@ -243,11 +367,12 @@ namespace SharpSpatial.Helpers
             return GetNearestPoints(geog1.Geo, geog2.Geo, geodesicPrecision);
         }
 
-        public static NearestSolution? GetNearestPoints(SharpGeometry geom1, SharpGeometry geom2)
-        {
-            return GetNearestPoints(geom1.Geo, geom1.Geo, null);
-        }
-
+        /// <summary>
+        /// Returns the shortest line between two <see cref="SharpGeometry"/>
+        /// </summary>
+        /// <param name="geom1"></param>
+        /// <param name="geom2"></param>
+        /// <returns></returns>
         public static SharpGeometry? GetShortestLine(SharpGeometry geom1, SharpGeometry geom2)
         {
             NearestSolution? nearestPoints = GetNearestPoints(geom1, geom2);
@@ -256,6 +381,14 @@ namespace SharpSpatial.Helpers
             return CreateLineString([nearestPoints.Point1, nearestPoints.Point2]);
         }
 
+        /// <summary>
+        /// Returns the shortest line between two <see cref="SharpGeography"/>
+        /// </summary>
+        /// <param name="geog1"></param>
+        /// <param name="geog2"></param>
+        /// <param name="geodesicPrecision">Geodesic precision to apply</param>
+        /// <param name="densifyWithBearingTolerance">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
         public static SharpGeography? GetShortestLine(SharpGeography geog1, SharpGeography geog2,
             GeodesicPrecision geodesicPrecision, double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
         {
@@ -270,6 +403,16 @@ namespace SharpSpatial.Helpers
             return CreateLineString(geog1.SRID, [nearestSolution.Point1, nearestSolution.Point2]);
         }
 
+        /// <summary>
+        /// Returns distance, initial and final bearing between two points
+        /// </summary>
+        /// <param name="x_lon_1">X (or Longitude) coordinate of point 1</param>
+        /// <param name="y_lat_1">Y (or Latitude) coordinate of point 1</param>
+        /// <param name="x_lon_2">X (or Longitude) coordinate of point 2</param>
+        /// <param name="y_lat_2">Y (or Latitude) coordinate of point 2</param>
+        /// <param name="geodesicPrecision">Eventual geodesic precision to apply</param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
         public static DistanceSolution? GetDistance(double x_lon_1, double y_lat_1, double x_lon_2, double y_lat_2, GeodesicPrecision? geodesicPrecision)
         {
             if (geodesicPrecision == null)
@@ -286,6 +429,13 @@ namespace SharpSpatial.Helpers
             }
         }
 
+        /// <summary>
+        /// Returns distance, initial and final bearing between two <see cref="Geometry"/>
+        /// </summary>
+        /// <param name="geo1"></param>
+        /// <param name="geo2"></param>
+        /// <param name="geodesicPrecision">Eventual geodesic precision to apply</param>
+        /// <returns></returns>
         private static DistanceSolution? GetDistance(Geometry geo1, Geometry geo2, GeodesicPrecision? geodesicPrecision)
         {
             DistanceSolution? result = null;
@@ -304,16 +454,37 @@ namespace SharpSpatial.Helpers
             return result;
         }
 
+        /// <summary>
+        /// Returns distance, initial and final bearing between two <see cref="Coordinate"/>
+        /// </summary>
+        /// <param name="point1"></param>
+        /// <param name="point2"></param>
+        /// <param name="geodesicPrecision">Eventual geodesic precision to apply</param>
+        /// <returns></returns>
         public static DistanceSolution? GetDistance(Coordinate point1, Coordinate point2, GeodesicPrecision? geodesicPrecision)
         {
             return GetDistance(point1.X, point1.Y, point2.X, point2.Y, geodesicPrecision);
         }
 
+        /// <summary>
+        /// Returns distance, initial and final bearing between two <see cref="SharpGeometry"/>
+        /// </summary>
+        /// <param name="geom1"></param>
+        /// <param name="geom2"></param>
+        /// <returns></returns>
         public static DistanceSolution? GetDistance(SharpGeometry geom1, SharpGeometry geom2)
         {
             return GetDistance(geom1.Geo, geom2.Geo, null);
         }
 
+        /// <summary>
+        /// Returns distance, initial and final bearing between two <see cref="SharpGeography"/>
+        /// </summary>
+        /// <param name="geog1"></param>
+        /// <param name="geog2"></param>
+        /// <param name="geodesicPrecision">Geodesic precision to apply</param>
+        /// <param name="densifyWithBearingTolerance">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
         public static DistanceSolution? GetDistance(SharpGeography geog1, SharpGeography geog2, GeodesicPrecision geodesicPrecision,
             double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
         {
@@ -325,6 +496,15 @@ namespace SharpSpatial.Helpers
             return GetDistance(geog1.Geo, geog2.Geo, geodesicPrecision);
         }
 
+        /// <summary>
+        /// Returns the destination point from a given point, initial bearing and distance.
+        /// </summary>
+        /// <param name="startPoint">Coordinate of the starting point</param>
+        /// <param name="initialBearing">Initial bearing (direction)</param>
+        /// <param name="distance">Distance from starting point (in meters when geodesicPrecision is given)</param>
+        /// <param name="geodesicPrecision">Eventual geodesic precision to apply</param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
         public static DestinationSolution? GetDestination(Coordinate startPoint, double initialBearing, double distance,
             GeodesicPrecision? geodesicPrecision)
         {
@@ -342,47 +522,75 @@ namespace SharpSpatial.Helpers
             }
         }
 
-        public static Coordinate Project(double lat, double lon)
-        {
-            GeoAPI.Geometries.Coordinate pointCoordinate = new(lon, lat);
-            GeoAPI.Geometries.Coordinate result = s_ctProj.MathTransform.Transform(pointCoordinate);
-            return new Coordinate(result.X, result.Y);
-        }
-
-        public static Coordinate Unproject(double x, double y)
-        {
-            GeoAPI.Geometries.Coordinate pointCoordinate = new(x, y);
-            GeoAPI.Geometries.Coordinate result = s_ctUnproj.MathTransform.Transform(pointCoordinate);
-            return new Coordinate(result.X, result.Y);
-        }
-
-        public static SharpGeometry? Project(SharpGeography? geography)
-        {
-            Geometry? projected = Project(geography?.Geo);
-            return projected != null ? new SharpGeometry(projected) : null;
-        }
-
-        public static SharpGeography? Unproject(SharpGeometry? geometry, int srid)
-        {
-            Geometry? unprojected = Unproject(geometry?.Geo);
-            return unprojected != null ? new SharpGeography(unprojected, srid) : null;
-        }
-
+        /// <summary>
+        /// Returns the planar buffer of the given <see cref="SharpGeometry"/>
+        /// </summary>
+        /// <param name="geom"></param>
+        /// <param name="distance">The width of the buffer</param>
+        /// <returns></returns>
         public static SharpGeometry GetBuffer(SharpGeometry geom, double distance)
         {
             return new SharpGeometry(geom.Geo.Buffer(distance));
         }
 
+        /// <summary>
+        /// Returns the geodesic buffer of the given <see cref="SharpGeography"/>
+        /// </summary>
+        /// <param name="geog"></param>
+        /// <param name="distance">The width of the buffer in meters</param>
+        /// <param name="densifyWithBearingTolerance">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
         public static SharpGeography GetBuffer(SharpGeography geog, double distance, double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
         {
             return new SharpGeography(CalculateBuffer(geog.Geo, distance, densifyWithBearingTolerance), geog.SRID, densifyWithBearingTolerance);
         }
 
+        /// <summary>
+        /// Returns true if the two given <see cref="SharpGeometry"/> intersect
+        /// </summary>
+        /// <param name="geom1"></param>
+        /// <param name="geom2"></param>
+        /// <returns></returns>
+        public static bool Intersect(SharpGeometry geom1, SharpGeometry geom2)
+        {
+            return geom1.Geo.Intersects(geom2.Geo);
+        }
+
+        /// <summary>
+        /// Returns true if the two given <see cref="SharpGeography"/> intersect
+        /// </summary>
+        /// <param name="geog1"></param>
+        /// <param name="geog2"></param>
+        /// <param name="densifyWithBearingTolerance">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
+        public static bool Intersect(SharpGeography geog1, SharpGeography geog2, double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
+        {
+            ThrowOnInvalidGeogArgs(geog1, geog2);
+
+            SharpGeography geog1Densified = Densify(geog1, densifyWithBearingTolerance);
+            SharpGeography geog2Densified = Densify(geog2, densifyWithBearingTolerance);
+
+            return geog1Densified.Geo.Intersects(geog2Densified.Geo);
+        }
+
+        /// <summary>
+        /// Returns the intersection between the two given <see cref="SharpGeometry"/>
+        /// </summary>
+        /// <param name="geom1"></param>
+        /// <param name="geom2"></param>
+        /// <returns></returns>
         public static SharpGeometry GetIntersection(SharpGeometry geom1, SharpGeometry geom2)
         {
             return new SharpGeometry(geom1.Geo.Intersection(geom2.Geo));
         }
 
+        /// <summary>
+        /// Returns the intersection between the two given <see cref="SharpGeography"/>
+        /// </summary>
+        /// <param name="geog1"></param>
+        /// <param name="geog2"></param>
+        /// <param name="densifyWithBearingTolerance">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
         public static SharpGeography GetIntersection(SharpGeography geog1, SharpGeography geog2, double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
         {
             ThrowOnInvalidGeogArgs(geog1, geog2);
@@ -395,21 +603,11 @@ namespace SharpSpatial.Helpers
             return new SharpGeography(intersection, geog1.SRID, densifyWithBearingTolerance);
         }
 
-        public static bool Intersect(SharpGeometry geom1, SharpGeometry geom2)
-        {
-            return geom1.Geo.Intersects(geom2.Geo);
-        }
-
-        public static bool Intersect(SharpGeography geog1, SharpGeography geog2, double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
-        {
-            ThrowOnInvalidGeogArgs(geog1, geog2);
-
-            SharpGeography geog1Densified = Densify(geog1, densifyWithBearingTolerance);
-            SharpGeography geog2Densified = Densify(geog2, densifyWithBearingTolerance);
-
-            return geog1Densified.Geo.Intersects(geog2Densified.Geo);
-        }
-
+        /// <summary>
+        /// Returns the union of all the given <see cref="Geometry"/>
+        /// </summary>
+        /// <param name="geometries"></param>
+        /// <returns></returns>
         public static Geometry? GetUnion(params Geometry[] geometries)
         {
             if (geometries == null || geometries.Length == 0)
@@ -474,6 +672,11 @@ namespace SharpSpatial.Helpers
             return unionGeometry;
         }
 
+        /// <summary>
+        /// Returns the union of all the given <see cref="SharpGeometry"/>
+        /// </summary>
+        /// <param name="geometries"></param>
+        /// <returns></returns>
         public static SharpGeometry? GetUnion(params SharpGeometry[] geometries)
         {
             Geometry? unionGeometry = GetUnion(geometries.Select(g => g.Geo).ToArray());
@@ -482,6 +685,11 @@ namespace SharpSpatial.Helpers
             return new SharpGeometry(unionGeometry);
         }
 
+        /// <summary>
+        /// Returns the union of all the given <see cref="SharpGeography"/>
+        /// </summary>
+        /// <param name="geographies"></param>
+        /// <returns></returns>
         public static SharpGeography? GetUnion(params SharpGeography[] geographies)
         {
             Geometry? unionGeometry = GetUnion(geographies.Select(g => g.Geo).ToArray());
@@ -490,25 +698,90 @@ namespace SharpSpatial.Helpers
             return new SharpGeography(unionGeometry, unionGeometry.SRID);
         }
 
-        public static SharpGeometry GetReduced(SharpGeometry geom, double tolerance)
+        /// <summary>
+        /// Returns the difference between the two given <see cref="SharpGeometry"/>
+        /// </summary>
+        /// <param name="geom1"></param>
+        /// <param name="geom2"></param>
+        /// <returns></returns>
+        public static SharpGeometry GetDifference(SharpGeometry geom1, SharpGeometry geom2)
+        {
+            return new SharpGeometry(geom1.Geo.Difference(geom2.Geo));
+        }
+
+        /// <summary>
+        /// Returns the difference between the two given <see cref="SharpGeography"/>
+        /// </summary>
+        /// <param name="geog1"></param>
+        /// <param name="geog2"></param>
+        /// <param name="densifyWithBearingTolerance">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
+        public static SharpGeography GetDifference(SharpGeography geog1, SharpGeography geog2, double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
+        {
+            ThrowOnInvalidGeogArgs(geog1, geog2);
+
+            SharpGeography geog1Densified = Densify(geog1, densifyWithBearingTolerance);
+            SharpGeography geog2Densified = Densify(geog2, densifyWithBearingTolerance);
+            Geometry difference = geog1Densified.Geo.Difference(geog2Densified.Geo);
+
+            return new SharpGeography(difference, geog1.SRID);
+        }
+
+        /// <summary>
+        /// Returns the simplified <see cref="SharpGeometry"/> of the given one, using the given tolerance
+        /// </summary>
+        /// <param name="geom"></param>
+        /// <param name="tolerance">Tolerance to use</param>
+        /// <returns></returns>
+        public static SharpGeometry GetSimplified(SharpGeometry geom, double tolerance)
         {
             Geometry simplified = DouglasPeuckerSimplifier.Simplify(geom.Geo, tolerance);
             return new SharpGeometry(simplified);
         }
 
-        public static SharpGeography GetReduced(SharpGeography geog, double tolerance)
+        /// <summary>
+        /// Returns the simplified <see cref="SharpGeography"/> of the given one, using the given tolerance
+        /// </summary>
+        /// <param name="geog"></param>
+        /// <param name="tolerance">Tolerance to use, in meters</param>
+        /// <returns></returns>
+        public static SharpGeography GetSimplified(SharpGeography geog, double tolerance)
         {
             double metersTolerance = tolerance / 111111.111111;
-            Geometry simplified = Reduce(geog.Geo, metersTolerance);
+            Geometry simplified = Simplify(geog.Geo, metersTolerance);
 
             return new SharpGeography(simplified, geog.SRID);
         }
 
+        /// <summary>
+        /// Returns the densified <see cref="SharpGeometry"/> of the given one, using the given distance tolerance
+        /// </summary>
+        /// <param name="geom"></param>
+        /// <param name="distanceTolerance">The distance tolerance to use</param>
+        /// <returns></returns>
         public static SharpGeometry GetDensified(SharpGeometry geom, double distanceTolerance)
         {
             return new SharpGeometry(NetTopologySuite.Densify.Densifier.Densify(geom.Geo, distanceTolerance));
         }
 
+        /// <summary>
+        /// Returns the densified <see cref="SharpGeography"/> of the given one, using the given bearing tolerance
+        /// </summary>
+        /// <param name="geog"></param>
+        /// <param name="densifyWithBearingTolerance">Tolerance for the bearing variation, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
+        public static SharpGeography GetDensified(SharpGeography geog, double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
+        {
+            return Densify(geog, densifyWithBearingTolerance);
+        }
+
+        /// <summary>
+        /// Returns the densified <see cref="SharpGeography"/>, based on Mercator projected version of the given one, using the given distance tolerance in meters.
+        /// Useful to force the resulting geography to follow the Mercator projection.
+        /// </summary>
+        /// <param name="geog"></param>
+        /// <param name="distanceTolerance">The distance tolerance to use, in meters</param>
+        /// <returns></returns>
         public static SharpGeography GetDensifiedProj(SharpGeography geog, double distanceTolerance)
         {
             List<Coordinate> resultCoordinates = [geog.Geo.Coordinates[0]];
@@ -553,32 +826,33 @@ namespace SharpSpatial.Helpers
             return CreateLineString(geog.SRID, resultCoordinates.ToArray());
         }
 
-        public static SharpGeometry GetDifference(SharpGeometry geom1, SharpGeometry geom2)
-        {
-            return new SharpGeometry(geom1.Geo.Difference(geom2.Geo));
-        }
-
-        public static SharpGeography GetDifference(SharpGeography geog1, SharpGeography geog2, double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
-        {
-            ThrowOnInvalidGeogArgs(geog1, geog2);
-
-            SharpGeography geog1Densified = Densify(geog1, densifyWithBearingTolerance);
-            SharpGeography geog2Densified = Densify(geog2, densifyWithBearingTolerance);
-            Geometry difference = geog1Densified.Geo.Difference(geog2Densified.Geo);
-
-            return new SharpGeography(difference, geog1.SRID);
-        }
-
+        /// <summary>
+        /// Returns the length (perimeter for polygon, length for linear shapes) of the given <see cref="SharpGeometry"/>
+        /// </summary>
+        /// <param name="geom"></param>
+        /// <returns></returns>
         public static double GetLength(SharpGeometry geom)
         {
             return geom.Geo.Length;
         }
 
+        /// <summary>
+        /// Returns the area of the given <see cref="SharpGeometry"/>
+        /// </summary>
+        /// <param name="geom"></param>
+        /// <returns></returns>
         public static double GetArea(SharpGeometry geom)
         {
             return geom.Geo.Area;
         }
 
+        /// <summary>
+        /// Returns the length (perimeter for polygon, length for linear shapes) of the given <see cref="SharpGeography"/> using the given <see cref="GeodesicPrecision"/>
+        /// </summary>
+        /// <param name="geog"></param>
+        /// <param name="geodesicPrecision">The geodesic precision model to use</param>
+        /// <param name="densifyWithBearingTolerance">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
         public static double GetLength(SharpGeography geog, GeodesicPrecision geodesicPrecision, double densifyWithBearingTolerance = DEFAULT_BEARING_TOLERANCE)
         {
             double result = 0;
@@ -598,6 +872,12 @@ namespace SharpSpatial.Helpers
             return result;
         }
 
+        /// <summary>
+        /// Returns the geodesic approximate area of this geography (with Haversine formula)
+        /// </summary>
+        /// <param name="geog"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
         public static double GetArea(SharpGeography geog)
         {
             if (geog.Geo == null || geog.Geo.IsEmpty)
@@ -627,6 +907,7 @@ namespace SharpSpatial.Helpers
             return Math.Abs(totalArea); // in m²
         }
 
+        #region Area support methods
         private static double ComputePolygonArea(Polygon polygon)
         {
             double area = ComputeRingArea(polygon.ExteriorRing);
@@ -682,7 +963,72 @@ namespace SharpSpatial.Helpers
                 Math.Cos(lat1) * Math.Cos(lat2) * Math.Cos(lon2 - lon1)
             );
         }
+        #endregion
 
+        /// <summary>
+        /// Returns true if the given <see cref="Geometry"/> crosses the International Date Line (IDL or Antimeridian).
+        /// </summary>
+        /// <param name="geometry"></param>
+        /// <returns></returns>
+        public static bool IsCrossingIDL(Geometry geometry)
+        {
+            for (int i = 0; i < geometry.NumPoints - 1; i++)
+            {
+                Coordinate point = geometry.Coordinates[i];
+                Coordinate nextPoint = geometry.Coordinates[i + 1];
+
+                if (IsCrossingIDL(point.X, nextPoint.X))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns true if the given <see cref="SharpGeography"/> crosses the International Date Line (IDL or Antimeridian).
+        /// </summary>
+        /// <param name="points"></param>
+        /// <returns></returns>
+        public static bool IsCrossingIDL(params SharpGeography[] points)
+        {
+            if (points?.Any() == true)
+            {
+                for (int i = 0; i < points.Length - 1; i++)
+                {
+                    if (IsCrossingIDL(points[i].Lon, points[i + 1].Lon))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns true if the given <see cref="SharpGeometry"/> crosses the International Date Line (IDL or Antimeridian)
+        /// </summary>
+        /// <param name="points"></param>
+        /// <returns></returns>
+        public static bool IsCrossingIDL(params SharpGeometry[] points)
+        {
+            if (points?.Any() == true)
+            {
+                for (int i = 0; i < points.Length - 1; i++)
+                {
+                    if (IsCrossingIDL(points[i].X, points[i + 1].X))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns a fixed <see cref="Geometry"/> for the International Date Line (IDL or Antimeridian) by shifting longitudes &lt; 0 by +360
+        /// </summary>
+        /// <param name="geometry"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="InvalidOperationException"></exception>
         public static Geometry GetInternationalDateLineFix(Geometry geometry)
         {
             if (geometry == null || geometry.IsEmpty)
@@ -713,76 +1059,33 @@ namespace SharpSpatial.Helpers
             return fixedGeom;
         }
 
+        /// <summary>
+        /// Returns a fixed <see cref="SharpGeometry"/> for the International Date Line (IDL or Antimeridian) by shifting longitudes &lt; 0 by +360
+        /// </summary>
+        /// <param name="geom"></param>
+        /// <returns></returns>
         public static SharpGeometry GetInternationalDateLineFix(SharpGeometry geom)
         {
             Geometry fixedGeo = GetInternationalDateLineFix(geom.Geo);
             return new SharpGeometry(fixedGeo);
         }
 
+        /// <summary>
+        /// Returns a fixed <see cref="SharpGeography"/> for the International Date Line (IDL or Antimeridian) by shifting longitudes &lt; 0 by +360
+        /// </summary>
+        /// <param name="geog"></param>
+        /// <returns></returns>
         public static SharpGeography GetInternationalDateLineFix(SharpGeography geog)
         {
             Geometry fixedGeo = GetInternationalDateLineFix(geog.Geo);
             return new SharpGeography(fixedGeo, geog.SRID, geog.ToleranceUsedForDensify);
         }
 
-        public static bool IsCrossingIDL(Geometry geometry)
-        {
-            for (int i = 0; i < geometry.NumPoints - 1; i++)
-            {
-                Coordinate point = geometry.Coordinates[i];
-                Coordinate nextPoint = geometry.Coordinates[i + 1];
-
-                if (IsCrossingIDL(point.X, nextPoint.X))
-                    return true;
-            }
-
-            return false;
-        }
-
-        public static bool IsCrossingIDL(params SharpGeography[] points)
-        {
-            if (points?.Any() == true)
-            {
-                for (int i = 0; i < points.Length - 1; i++)
-                {
-                    if (IsCrossingIDL(points[i].Lon, points[i + 1].Lon))
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
-        public static bool IsCrossingIDL(params SharpGeometry[] points)
-        {
-            if (points?.Any() == true)
-            {
-                for (int i = 0; i < points.Length - 1; i++)
-                {
-                    if (IsCrossingIDL(points[i].X, points[i + 1].X))
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
-        public static SharpGeography? MakeValid(SharpGeography geog)
-        {
-            Geometry? validGeo = MakeValid(geog.Geo);
-            if (validGeo == null) return null;
-
-            return new SharpGeography(validGeo, geog.SRID, geog.ToleranceUsedForDensify);
-        }
-
-        public static SharpGeometry? MakeValid(SharpGeometry geom)
-        {
-            Geometry? validGeo = MakeValid(geom.Geo);
-            if (validGeo == null) return null;
-
-            return new SharpGeometry(validGeo);
-        }
-
+        /// <summary>
+        /// Returns true if the given <see cref="Geometry"/> is well oriented (CCW).
+        /// </summary>
+        /// <param name="geometry"></param>
+        /// <returns></returns>
         public static bool IsWellOriented(Geometry geometry)
         {
             if (geometry.NumPoints < 4) return true;
@@ -802,11 +1105,32 @@ namespace SharpSpatial.Helpers
             }
         }
 
+        /// <summary>
+        /// Returns true if the given <see cref="SharpGeometry"/> is well oriented (CCW)
+        /// </summary>
+        /// <param name="geom"></param>
+        /// <returns></returns>
+        public static bool IsWellOriented(SharpGeometry geom)
+        {
+            return IsWellOriented(geom.Geo);
+        }
+
+        /// <summary>
+        /// Returns true if the given <see cref="SharpGeography"/> is well oriented (CCW).
+        /// </summary>
+        /// <param name="geog"></param>
+        /// <returns></returns>
         public static bool IsWellOriented(SharpGeography geog)
         {
             return IsWellOriented(geog.Geo);
         }
 
+        /// <summary>
+        /// Computes a new <see cref="SharpGeography"/> which has all component coordinate sequences
+        /// in reverse order (opposite orientation) to this one.
+        /// </summary>
+        /// <param name="geog"></param>
+        /// <returns></returns>
         public static SharpGeography Revert(SharpGeography geog)
         {
             SharpGeography result = CreateGeography(geog.Geo.Reverse(), geog.SRID);
@@ -814,9 +1138,90 @@ namespace SharpSpatial.Helpers
             return result;
         }
 
+        /// <summary>
+        /// Computes a new <see cref="SharpGeometry"/> which has all component coordinate sequences
+        /// in reverse order (opposite orientation) to this one
+        /// </summary>
+        /// <param name="geom"></param>
+        /// <returns></returns>
         public static SharpGeometry Revert(SharpGeometry geom)
         {
             return CreateGeometry(geom.Geo.Reverse());
+        }
+
+        /// <summary>
+        /// Returns the fixed <see cref="SharpGeography"/> from the given one
+        /// </summary>
+        /// <param name="geog"></param>
+        /// <returns></returns>
+        public static SharpGeography? MakeValid(SharpGeography geog)
+        {
+            Geometry? validGeo = MakeValid(geog.Geo);
+            if (validGeo == null) return null;
+
+            return new SharpGeography(validGeo, geog.SRID, geog.ToleranceUsedForDensify);
+        }
+
+        /// <summary>
+        /// Returns the fixed <see cref="SharpGeometry"/> from the given one
+        /// </summary>
+        /// <param name="geom"></param>
+        /// <returns></returns>
+        public static SharpGeometry? MakeValid(SharpGeometry geom)
+        {
+            Geometry? validGeo = MakeValid(geom.Geo);
+            if (validGeo == null) return null;
+
+            return new SharpGeometry(validGeo);
+        }
+
+        /// <summary>
+        /// Returns the Mercator projected point from a given latitude and longitude WGS84 coordinates.
+        /// </summary>
+        /// <param name="lat"></param>
+        /// <param name="lon"></param>
+        /// <returns></returns>
+        public static Coordinate Project(double lat, double lon)
+        {
+            GeoAPI.Geometries.Coordinate pointCoordinate = new(lon, lat);
+            GeoAPI.Geometries.Coordinate result = s_ctProj.MathTransform.Transform(pointCoordinate);
+            return new Coordinate(result.X, result.Y);
+        }
+
+        /// <summary>
+        /// Returns the unprojected point from a given x and y Mercator coordinates.
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <returns></returns>
+        public static Coordinate Unproject(double x, double y)
+        {
+            GeoAPI.Geometries.Coordinate pointCoordinate = new(x, y);
+            GeoAPI.Geometries.Coordinate result = s_ctUnproj.MathTransform.Transform(pointCoordinate);
+            return new Coordinate(result.X, result.Y);
+        }
+
+        /// <summary>
+        /// Returns a Mercator projected <see cref="SharpGeometry"/> from a <see cref="SharpGeography"/>
+        /// </summary>
+        /// <param name="geography"></param>
+        /// <returns></returns>
+        public static SharpGeometry? Project(SharpGeography? geography)
+        {
+            Geometry? projected = Project(geography?.Geo);
+            return projected != null ? new SharpGeometry(projected) : null;
+        }
+
+        /// <summary>
+        /// Returns an unprojected <see cref="SharpGeography"/>, with the given SRID, from a Mercator <see cref="SharpGeometry"/>
+        /// </summary>
+        /// <param name="geometry"></param>
+        /// <param name="srid"></param>
+        /// <returns></returns>
+        public static SharpGeography? Unproject(SharpGeometry? geometry, int srid)
+        {
+            Geometry? unprojected = Unproject(geometry?.Geo);
+            return unprojected != null ? new SharpGeography(unprojected, srid) : null;
         }
         #endregion
 
@@ -919,6 +1324,43 @@ namespace SharpSpatial.Helpers
             }
 
             return east.Union(west);
+        }
+
+        private static Geometry FixParsedGeometry(Geometry geometry, bool? makeValid, double toleranceForDensify = 0)
+        {
+            Geometry result = geometry;
+
+            if (result is Polygon or MultiPolygon)
+            {
+                result = FixAntimeridianCrossing(result);
+            }
+
+            if (makeValid != false)
+            {
+                if (!result.IsValid)
+                {
+                    if (makeValid == null)
+                        throw new ArgumentException("Geometry is invalid and 'makeValid' is not explicitly allowed.");
+
+                    result = MakeValid(result)
+                        ?? throw new InvalidOperationException("Geometry is invalid and cannot be repaired.");
+                }
+
+                if (!IsWellOriented(result))
+                {
+                    if (makeValid == null)
+                        throw new ArgumentException("Geometry orientation is incorrect and 'makeValid' is not explicitly allowed.");
+
+                    result = result.Reverse();
+                }
+            }
+
+            if (toleranceForDensify > 0)
+            {
+                result = Densify(result, toleranceForDensify);
+            }
+
+            return result;
         }
 
         private static void ThrowOnInvalidGeogArgs(params SharpGeography[] geographies)
@@ -1350,7 +1792,7 @@ namespace SharpSpatial.Helpers
                 return BufferSinglePoint(geometry.Coordinates[0], distance, 1);
             }
 
-            var buffers = new List<Geometry>();
+            List<Geometry> buffers = [geometry];
             for (int i = 0; i < geometry.Coordinates.Length - 1; i++)
             {
                 try
@@ -1476,7 +1918,7 @@ namespace SharpSpatial.Helpers
 
         private static SharpGeography Densify(SharpGeography geography, double bearingTolerance)
         {
-            if (bearingTolerance == 0) return geography;
+            if (bearingTolerance <= 0) return geography;
             if (geography.ToleranceUsedForDensify > 0 && geography.ToleranceUsedForDensify < bearingTolerance)
                 return geography;
 
@@ -1602,7 +2044,7 @@ namespace SharpSpatial.Helpers
             return geometry.IsValid ? geometry : GeometryFixer.Fix(geometry);
         }
 
-        private static Geometry Reduce(Geometry geometry, double tolerance)
+        private static Geometry Simplify(Geometry geometry, double tolerance)
         {
             if (geometry.IsEmpty)
                 return geometry;
@@ -1615,9 +2057,9 @@ namespace SharpSpatial.Helpers
                         var parts = new List<Geometry>();
                         for (int i = 0; i < geometry.NumGeometries; i++)
                         {
-                            Geometry reduced = Reduce(geometry.GetGeometryN(i), tolerance);
-                            if (reduced != null && !reduced.IsEmpty)
-                                parts.Add(reduced);
+                            Geometry simplified = Simplify(geometry.GetGeometryN(i), tolerance);
+                            if (simplified != null && !simplified.IsEmpty)
+                                parts.Add(simplified);
                         }
 
                         return s_geometryFactory.BuildGeometry(parts).Union(); // single union at end
@@ -1651,8 +2093,8 @@ namespace SharpSpatial.Helpers
                                 holes.Add(s_geometryFactory.CreateLinearRing(simplifiedHole.CoordinateSequence));
                         }
 
-                        Geometry reducedPolygon = s_geometryFactory.CreatePolygon(shell, holes.ToArray());
-                        return reducedPolygon.IsValid ? reducedPolygon : geometry;
+                        Geometry simplifiedPolygon = s_geometryFactory.CreatePolygon(shell, holes.ToArray());
+                        return simplifiedPolygon.IsValid ? simplifiedPolygon : geometry;
                     }
 
                 default:
