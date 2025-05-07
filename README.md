@@ -1,6 +1,7 @@
 # SharpSpatial
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ff69b4)](https://github.com/sponsors/Lodeli)
+[![NuGet](https://img.shields.io/nuget/v/SharpSpatial.svg)](https://www.nuget.org/packages/SharpSpatial/)
 
 **SharpSpatial** is a lightweight geospatial library for .NET, built as a modern alternative to `SqlGeography` and `SqlGeometry`, with full support for .NET Core and custom geodesic calculations written entirely in C#.
 
