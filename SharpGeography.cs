@@ -67,7 +67,7 @@ namespace SharpSpatial
         /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
         /// <param name="toleranceForDensify">Value of tolerance to be used for geodesic densify, 0 to not densify result</param>
         public SharpGeography(string wkt, int srid, bool? makeValid, double toleranceForDensify = 0)
-            : base(GeoHelper.CreateGeom(wkt, makeValid, toleranceForDensify), srid, toleranceForDensify)
+            : base(GeoHelper.CreateGeomFromWKT(wkt, makeValid, toleranceForDensify), srid, toleranceForDensify)
         { }
         #endregion
 

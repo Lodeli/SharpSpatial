@@ -22,6 +22,7 @@
   <ItemGroup>
     <PackageReference Include="GeoAPI" Version="1.7.5" />
     <PackageReference Include="NetTopologySuite" Version="2.6.0" />
+    <PackageReference Include="NetTopologySuite.IO.GeoJSON" Version="4.0.0" />
     <PackageReference Include="ProjNET4GeoAPI" Version="1.4.1" />
   </ItemGroup>
 

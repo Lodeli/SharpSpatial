@@ -43,7 +43,7 @@ namespace SharpSpatial
         /// </summary>
         /// <param name="wkt">WKT to parse</param>
         /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
-        public SharpGeometry(string wkt, bool? makeValid) : this(GeoHelper.CreateGeom(wkt, makeValid, 0))
+        public SharpGeometry(string wkt, bool? makeValid) : this(GeoHelper.CreateGeomFromWKT(wkt, makeValid, 0))
         { }
         #endregion
 

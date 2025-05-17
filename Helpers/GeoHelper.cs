@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using GeoAPI.CoordinateSystems;
 using GeoAPI.CoordinateSystems.Transformations;
 using NetTopologySuite;
+using NetTopologySuite.Features;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Geometries.Utilities;
 using NetTopologySuite.IO;
@@ -53,6 +54,7 @@ namespace SharpSpatial.Helpers
         private static readonly ICoordinateTransformationFactory s_ctFact;
         private static readonly WKTReader s_wktReader;
         private static readonly WKBReader s_wkbReader;
+        private static readonly GeoJsonReader s_geoJsonReader;
         private static readonly GeometryFactory s_geometryFactory;
         private static readonly ICoordinateTransformation s_ctProj;
         private static readonly ICoordinateTransformation s_ctUnproj;
@@ -68,6 +70,7 @@ namespace SharpSpatial.Helpers
             NtsGeometryServices ntsGeometryServices = new(new PrecisionModel(PrecisionModels.Floating), 4326);
             s_wktReader = new(ntsGeometryServices);
             s_wkbReader = new(ntsGeometryServices);
+            s_geoJsonReader = new();
 
             IGeographicCoordinateSystem sourceCS = GeographicCoordinateSystem.WGS84;
             IProjectedCoordinateSystem targetCS = ProjectedCoordinateSystem.WebMercator;
@@ -165,7 +168,7 @@ namespace SharpSpatial.Helpers
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
-        public static Geometry CreateGeom(string wkt, bool? makeValid, double toleranceForDensify = 0)
+        public static Geometry CreateGeomFromWKT(string wkt, bool? makeValid, double toleranceForDensify = 0)
         {
             Geometry result = s_wktReader.Read(wkt);
             return FixParsedGeometry(result, makeValid, toleranceForDensify);
@@ -177,14 +180,14 @@ namespace SharpSpatial.Helpers
         /// <param name="wkt">The WKT to parse</param>
         /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
         /// <returns></returns>
-        public static SharpGeometry CreateGeometry(string wkt, bool? makeValid)
+        public static SharpGeometry CreateGeometryFromWKT(string wkt, bool? makeValid)
         {
-            Geometry geo = CreateGeom(wkt, makeValid, 0);
+            Geometry geo = CreateGeomFromWKT(wkt, makeValid, 0);
             return new SharpGeometry(geo);
         }
 
         /// <summary>
-        /// Creates a new <see cref="SharpGeography"/> from the given Well-Known Text (WKT) string with the given SRID and eventually a tolerance already used for densification
+        /// Creates a new <see cref="SharpGeography"/> from the given Well-Known Text (WKT) string with the given SRID and eventually a tolerance to use for densification
         /// </summary>
         /// <param name="wkt">The WKT to parse</param>
         /// <param name="srid">The SRID to assign to the resulting geography</param>
@@ -193,9 +196,9 @@ namespace SharpSpatial.Helpers
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
-        public static SharpGeography CreateGeography(string wkt, int srid, bool? makeValid, double toleranceForDensify = DEFAULT_BEARING_TOLERANCE)
+        public static SharpGeography CreateGeographyFromWKT(string wkt, int srid, bool? makeValid, double toleranceForDensify = DEFAULT_BEARING_TOLERANCE)
         {
-            Geometry result = CreateGeom(wkt, makeValid, toleranceForDensify);
+            Geometry result = CreateGeomFromWKT(wkt, makeValid, toleranceForDensify);
             return new SharpGeography(result, srid, toleranceForDensify);
         }
 
@@ -209,7 +212,7 @@ namespace SharpSpatial.Helpers
         /// <exception cref="ArgumentException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
         /// <returns></returns>
-        public static Geometry CreateGeom(byte[] wkb, bool? makeValid, double toleranceForDensify = 0)
+        public static Geometry CreateGeomFromWKB(byte[] wkb, bool? makeValid, double toleranceForDensify = 0)
         {
             Geometry result = s_wkbReader.Read(wkb);
             return FixParsedGeometry(result, makeValid, toleranceForDensify);
@@ -221,24 +224,83 @@ namespace SharpSpatial.Helpers
         /// <param name="wkb">The WKB to parse</param>
         /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
         /// <returns></returns>
-        public static SharpGeometry CreateGeometry(byte[] wkb, bool? makeValid)
+        public static SharpGeometry CreateGeometryFromWKB(byte[] wkb, bool? makeValid)
         {
-            Geometry geo = CreateGeom(wkb, makeValid, 0);
+            Geometry geo = CreateGeomFromWKB(wkb, makeValid, 0);
             return new SharpGeometry(geo);
         }
 
         /// <summary>
-        /// Creates a new <see cref="SharpGeography"/> from the given Well-Known Binary (WKB) byte array with the given SRID and eventually a tolerance already used for densification
+        /// Creates a new <see cref="SharpGeography"/> from the given Well-Known Binary (WKB) byte array with the given SRID and eventually a tolerance to use for densification
         /// </summary>
         /// <param name="wkb">The WKB to parse</param>
         /// <param name="srid">The SRID to assign to the resulting geography</param>
         /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
         /// <param name="toleranceForDensify">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
         /// <returns></returns>
-        public static SharpGeography CreateGeography(byte[] wkb, int srid, bool? makeValid, double toleranceForDensify = DEFAULT_BEARING_TOLERANCE)
+        public static SharpGeography CreateGeographyFromWKB(byte[] wkb, int srid, bool? makeValid, double toleranceForDensify = DEFAULT_BEARING_TOLERANCE)
         {
-            Geometry result = CreateGeom(wkb, makeValid, toleranceForDensify);
+            Geometry result = CreateGeomFromWKB(wkb, makeValid, toleranceForDensify);
             return new SharpGeography(result, srid, toleranceForDensify);
+        }
+
+        /// <summary>
+        /// Creates a list of <see cref="Geometry"/> from the given GeoJSON string
+        /// </summary>
+        /// <param name="geoJson"></param>
+        /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
+        /// <param name="toleranceForDensify">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
+        public static List<Geometry> CreateGeomFromGeoJson(string geoJson, bool? makeValid, double toleranceForDensify = 0)
+        {
+            List<Geometry> result = [];
+            FeatureCollection features = s_geoJsonReader.Read<FeatureCollection>(geoJson);
+            foreach (Feature feature in features)
+            {
+                Geometry geom = feature.Geometry;
+                if (geom != null)
+                {
+                    result.Add(FixParsedGeometry(geom, makeValid, toleranceForDensify));
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Creates a list of <see cref="SharpGeometry"/> from the given GeoJSON string
+        /// </summary>
+        /// <param name="geoJson"></param>
+        /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
+        /// <returns></returns>
+        public static List<SharpGeometry> CreateGeometryFromGeoJson(string geoJson, bool? makeValid)
+        {
+            List<SharpGeometry> result = [];
+            List<Geometry> geometries = CreateGeomFromGeoJson(geoJson, makeValid, 0);
+            foreach (Geometry geometry in geometries)
+            {
+                result.Add(new SharpGeometry(geometry));
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Creates a list of <see cref="SharpGeography"/> from the given GeoJSON string with the given SRID and eventually a tolerance to  use for densification
+        /// </summary>
+        /// <param name="geoJson"></param>
+        /// <param name="srid">The SRID to assign to the resulting geography</param>
+        /// <param name="makeValid">False: do not perform any check, True: force a MakeValid on the geometry, Null: raise an exception if invalid</param>
+        /// <param name="toleranceForDensify">Tolerance for the bearing variation when densifying, higher values reduce precision but improve speed, 0 to not densify result. Default value is <see cref="DEFAULT_BEARING_TOLERANCE"/></param>
+        /// <returns></returns>
+        public static List<SharpGeography> CreateGeographyFromGeoJson(string geoJson, int srid, bool? makeValid, double toleranceForDensify = DEFAULT_BEARING_TOLERANCE)
+        {
+            List<SharpGeography> result = [];
+            List<Geometry> geometries = CreateGeomFromGeoJson(geoJson, makeValid, toleranceForDensify);
+            foreach (Geometry geometry in geometries)
+            {
+                result.Add(new SharpGeography(geometry, srid));
+            }
+            return result;
         }
         #endregion
 
